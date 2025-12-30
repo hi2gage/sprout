@@ -1,5 +1,5 @@
 {
-  "originHash" : "067c5ff8210b63da6783c10229d859ef8cc5200727e4f3241faf8b3ffa6e6641",
+  "originHash" : "8f9cc35d9a3b2be3a7fa181131edcdf896d2497711a2449d7b69401720ba2692",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -8,6 +8,33 @@
       "state" : {
         "revision" : "c5d11a805e765f52ba34ec7284bd4fcd6ba68615",
         "version" : "1.7.0"
+      }
+    },
+    {
+      "identity" : "swift-subprocess",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-subprocess.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "ab2072d457d1464b17166cc02125fc9fc0791e1a"
+      }
+    },
+    {
+      "identity" : "swift-system",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-system",
+      "state" : {
+        "revision" : "395a77f0aa927f0ff73941d7ac35f2b46d47c9db",
+        "version" : "1.6.3"
+      }
+    },
+    {
+      "identity" : "tomldecoder",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/dduan/TOMLDecoder.git",
+      "state" : {
+        "revision" : "cb460d67dab263f33e2fc49de2f2ab5307f9bbbb",
+        "version" : "0.4.2"
       }
     }
   ],
