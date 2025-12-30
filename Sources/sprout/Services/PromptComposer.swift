@@ -4,8 +4,8 @@ import Foundation
 struct PromptComposer {
     let config: PromptConfig?
 
-    /// Compose the prompt and write it to a temp file
-    /// - Returns: Path to the temp file
+    /// Compose the prompt and write it to ~/.sprout/prompts/
+    /// - Returns: Path to the prompt file
     func compose(context: TicketContext, variables: [String: String]) throws -> String {
         var parts: [String] = []
 
@@ -28,13 +28,21 @@ struct PromptComposer {
 
         let fullPrompt = parts.joined(separator: "\n\n")
 
-        // Write to temp file
-        let tempDir = FileManager.default.temporaryDirectory
-        let filename = "sprout-\(UUID().uuidString.prefix(8)).md"
-        let tempFile = tempDir.appendingPathComponent(filename)
+        // Write to ~/.sprout/prompts/
+        let promptsDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".sprout")
+            .appendingPathComponent("prompts")
 
-        try fullPrompt.write(to: tempFile, atomically: true, encoding: .utf8)
+        // Create directory if needed
+        try FileManager.default.createDirectory(at: promptsDir, withIntermediateDirectories: true)
 
-        return tempFile.path
+        // Use branch name for filename
+        let branch = variables["branch"] ?? "prompt"
+        let filename = "\(branch).md"
+        let promptFile = promptsDir.appendingPathComponent(filename)
+
+        try fullPrompt.write(to: promptFile, atomically: true, encoding: .utf8)
+
+        return promptFile.path
     }
 }

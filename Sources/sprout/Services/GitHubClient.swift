@@ -2,18 +2,29 @@ import Foundation
 
 /// Client for fetching issues from GitHub API
 struct GitHubClient {
-    let config: GitHubConfig
+    let repo: String
+    let token: String?
+
+    /// Initialize with just a repo (token from env)
+    init(repo: String) {
+        self.repo = repo
+        self.token = nil
+    }
+
+    /// Initialize with config (for backwards compatibility)
+    init(config: GitHubConfig) {
+        self.repo = config.repo ?? ""
+        self.token = config.token
+    }
 
     /// Fetch an issue by its number
     func fetchIssue(_ issueNumber: String) async throws -> TicketContext {
-        // Get token from environment or config
-        guard let token = ProcessInfo.processInfo.environment["GITHUB_TOKEN"] ?? config.token else {
-            throw SourceError.authFailed("GitHub: GITHUB_TOKEN not set")
-        }
-
-        // Get repo from config
-        guard let repo = config.repo else {
-            throw SourceError.githubNotConfigured
+        // Get token from environment or init
+        // Use SPROUT_GITHUB_TOKEN to avoid conflicts with gh CLI
+        guard let token = ProcessInfo.processInfo.environment["SPROUT_GITHUB_TOKEN"]
+            ?? ProcessInfo.processInfo.environment["GITHUB_TOKEN"]
+            ?? token else {
+            throw SourceError.authFailed("GitHub: SPROUT_GITHUB_TOKEN or GITHUB_TOKEN not set")
         }
 
         // Build URL

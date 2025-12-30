@@ -91,6 +91,91 @@ struct GitService {
         return nil
     }
 
+    /// List all worktrees (excluding the main one)
+    func listWorktrees() async throws -> [(path: String, branch: String)] {
+        let result = try await Subprocess.run(
+            .name("git"),
+            arguments: ["worktree", "list", "--porcelain"],
+            output: .string(limit: 65536),
+            error: .discarded
+        )
+
+        guard result.terminationStatus.isSuccess,
+              let output = result.standardOutput else {
+            return []
+        }
+
+        var worktrees: [(path: String, branch: String)] = []
+        var currentPath: String?
+        var currentBranch: String?
+
+        for line in output.split(separator: "\n") {
+            let lineStr = String(line)
+            if lineStr.hasPrefix("worktree ") {
+                // Save previous worktree if complete
+                if let path = currentPath, let branch = currentBranch {
+                    worktrees.append((path: path, branch: branch))
+                }
+                currentPath = String(lineStr.dropFirst("worktree ".count))
+                currentBranch = nil
+            } else if lineStr.hasPrefix("branch refs/heads/") {
+                currentBranch = String(lineStr.dropFirst("branch refs/heads/".count))
+            }
+        }
+
+        // Add last worktree
+        if let path = currentPath, let branch = currentBranch {
+            worktrees.append((path: path, branch: branch))
+        }
+
+        // Filter out main worktree (it won't have a branch in the same format typically)
+        // and only return worktrees that are in a "worktrees" directory
+        return worktrees.filter { $0.path.contains("worktrees") }
+    }
+
+    /// Remove a worktree
+    func removeWorktree(at path: String) async throws {
+        let result = try await Subprocess.run(
+            .name("git"),
+            arguments: ["worktree", "remove", path, "--force"],
+            input: .none,
+            output: .string(limit: 4096),
+            error: .string(limit: 4096)
+        )
+
+        guard result.terminationStatus.isSuccess else {
+            let stderr = result.standardError ?? "Unknown error"
+            throw GitError.commandFailed("git worktree remove", stderr)
+        }
+    }
+
+    /// Delete a local branch
+    func deleteBranch(_ branch: String) async throws {
+        let result = try await Subprocess.run(
+            .name("git"),
+            arguments: ["branch", "-D", branch],
+            input: .none,
+            output: .string(limit: 4096),
+            error: .string(limit: 4096)
+        )
+
+        guard result.terminationStatus.isSuccess else {
+            let stderr = result.standardError ?? "Unknown error"
+            throw GitError.commandFailed("git branch -D", stderr)
+        }
+    }
+
+    /// Prune stale worktree references
+    func pruneWorktrees() async throws {
+        _ = try await Subprocess.run(
+            .name("git"),
+            arguments: ["worktree", "prune"],
+            input: .none,
+            output: .discarded,
+            error: .discarded
+        )
+    }
+
     /// Check if a branch exists locally or remotely
     func branchExists(_ branch: String) async throws -> Bool {
         // Check local
