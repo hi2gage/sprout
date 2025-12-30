@@ -59,6 +59,38 @@ struct GitService {
         }
     }
 
+    /// Get the current repo's owner/repo from the remote origin
+    /// Returns format like "owner/repo" (e.g., "hi2gage/FreshWall")
+    func getRemoteRepo() async throws -> String? {
+        let result = try await Subprocess.run(
+            .name("git"),
+            arguments: ["remote", "get-url", "origin"],
+            output: .string(limit: 4096),
+            error: .discarded
+        )
+
+        guard result.terminationStatus.isSuccess,
+              let output = result.standardOutput else {
+            return nil
+        }
+
+        let url = output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        return extractRepoFromRemoteURL(url)
+    }
+
+    /// Extract owner/repo from various git remote URL formats
+    private func extractRepoFromRemoteURL(_ url: String) -> String? {
+        // SSH format: git@github.com:owner/repo.git
+        if let match = url.firstMatch(of: /github\.com:([^\/]+\/[^\/]+?)(\.git)?$/) {
+            return String(match.1)
+        }
+        // HTTPS format: https://github.com/owner/repo.git
+        if let match = url.firstMatch(of: /github\.com\/([^\/]+\/[^\/]+?)(\.git)?$/) {
+            return String(match.1)
+        }
+        return nil
+    }
+
     /// Check if a branch exists locally or remotely
     func branchExists(_ branch: String) async throws -> Bool {
         // Check local

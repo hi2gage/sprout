@@ -5,8 +5,8 @@ enum InputSource: CustomStringConvertible {
     /// Jira ticket (e.g., "IOS-1234")
     case jira(String)
 
-    /// GitHub issue number (e.g., "567")
-    case github(String)
+    /// GitHub issue number (e.g., "567"), with optional repo from URL
+    case github(String, repo: String?)
 
     /// Raw prompt text
     case rawPrompt(String)
@@ -15,7 +15,10 @@ enum InputSource: CustomStringConvertible {
         switch self {
         case .jira(let id):
             return "Jira(\(id))"
-        case .github(let number):
+        case .github(let number, let repo):
+            if let repo = repo {
+                return "GitHub(\(repo)#\(number))"
+            }
             return "GitHub(#\(number))"
         case .rawPrompt(let prompt):
             let truncated = prompt.prefix(30)

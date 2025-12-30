@@ -109,7 +109,7 @@ struct Sprout: AsyncParsableCommand {
             return .jira(jira)
         }
         if let github = githubIssue {
-            return .github(github)
+            return .github(github, repo: nil)
         }
         if let prompt = rawPrompt {
             return .rawPrompt(prompt)
@@ -130,7 +130,17 @@ struct Sprout: AsyncParsableCommand {
             let client = JiraClient(config: jiraConfig)
             return try await client.fetchTicket(ticketId)
 
-        case .github(let issueNumber):
+        case .github(let issueNumber, let urlRepo):
+            // If repo was extracted from URL, validate it matches current repo
+            if let urlRepo = urlRepo {
+                let gitService = GitService()
+                if let currentRepo = try await gitService.getRemoteRepo() {
+                    if currentRepo.lowercased() != urlRepo.lowercased() {
+                        throw SourceError.repoMismatch(expected: urlRepo, actual: currentRepo)
+                    }
+                }
+            }
+
             guard let githubConfig = config.sources?.github else {
                 throw SourceError.githubNotConfigured
             }
@@ -241,6 +251,7 @@ enum SourceError: Error, CustomStringConvertible {
     case authFailed(String)
     case ticketNotFound(String)
     case networkError(Error)
+    case repoMismatch(expected: String, actual: String)
 
     var description: String {
         switch self {
@@ -254,6 +265,8 @@ enum SourceError: Error, CustomStringConvertible {
             return "Ticket not found: \(id)"
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
+        case .repoMismatch(let expected, let actual):
+            return "Repository mismatch: URL is for '\(expected)' but you're in '\(actual)'"
         }
     }
 

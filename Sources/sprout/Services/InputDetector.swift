@@ -14,8 +14,8 @@ struct InputDetector {
 
         // Check for GitHub URL pattern
         // e.g., https://github.com/org/repo/issues/567
-        if let issueNumber = extractGitHubFromURL(trimmed) {
-            return .github(issueNumber)
+        if let (issueNumber, repo) = extractGitHubFromURL(trimmed) {
+            return .github(issueNumber, repo: repo)
         }
 
         // Check for Jira ticket pattern: ABC-123
@@ -25,10 +25,10 @@ struct InputDetector {
 
         // Check for GitHub shorthand patterns: #567 or gh:567
         if let match = trimmed.wholeMatch(of: /^#(\d+)$/) {
-            return .github(String(match.1))
+            return .github(String(match.1), repo: nil)
         }
         if let match = trimmed.wholeMatch(of: /^(?i)gh:(\d+)$/) {
-            return .github(String(match.1))
+            return .github(String(match.1), repo: nil)
         }
 
         // Default to raw prompt
@@ -45,13 +45,14 @@ struct InputDetector {
         return String(match.1)
     }
 
-    /// Extract GitHub issue number from a GitHub URL
-    private static func extractGitHubFromURL(_ url: String) -> String? {
+    /// Extract GitHub issue number and repo from a GitHub URL
+    /// Returns (issueNumber, "owner/repo")
+    private static func extractGitHubFromURL(_ url: String) -> (String, String)? {
         // Pattern: github.com/owner/repo/issues/123
-        let pattern = /github\.com\/[^\/]+\/[^\/]+\/issues\/(\d+)/
+        let pattern = /github\.com\/([^\/]+\/[^\/]+)\/issues\/(\d+)/
         guard let match = url.firstMatch(of: pattern) else {
             return nil
         }
-        return String(match.1)
+        return (String(match.2), String(match.1))
     }
 }
