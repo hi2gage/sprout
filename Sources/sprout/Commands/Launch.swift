@@ -23,6 +23,9 @@ struct Launch: AsyncParsableCommand {
     @Option(name: [.short, .customLong("prompt")], help: "Explicitly use raw prompt")
     var rawPrompt: String?
 
+    @Option(name: [.customLong("pr")], help: "Explicitly use GitHub PR number")
+    var githubPR: String?
+
     // MARK: - Options
 
     @Option(name: [.short, .long], help: "Override branch name")
@@ -72,7 +75,7 @@ struct Launch: AsyncParsableCommand {
         }
 
         // Compute variables
-        let variables = try await buildVariables(context: context, config: sproutConfig)
+        var variables = try await buildVariables(context: context, config: sproutConfig)
 
         if verbose {
             print("Variables:")
@@ -83,6 +86,17 @@ struct Launch: AsyncParsableCommand {
                 print("  \(key): \(displayValue)")
             }
         }
+
+        // Ensure worktree exists (create if needed)
+        let worktreePath = variables["worktree"]!
+        let branchName = variables["branch"]!
+        let worktreeExists = try await ensureWorktreeExists(
+            at: worktreePath,
+            branch: branchName,
+            hasPRBranch: context.sourceBranch != nil,
+            dryRun: dryRun
+        )
+        variables["worktree_created"] = worktreeExists ? "false" : "true"
 
         // Compose and write prompt file
         let promptFile = try composePrompt(context: context, config: sproutConfig, variables: variables)
@@ -115,6 +129,9 @@ struct Launch: AsyncParsableCommand {
         if let github = githubIssue {
             return .github(github, repo: nil)
         }
+        if let pr = githubPR {
+            return .githubPR(pr, repo: nil)
+        }
         if let prompt = rawPrompt {
             return .rawPrompt(prompt)
         }
@@ -135,28 +152,45 @@ struct Launch: AsyncParsableCommand {
             return try await client.fetchTicket(ticketId)
 
         case .github(let issueNumber, let urlRepo):
-            // If repo was extracted from URL, validate it matches current repo
-            if let urlRepo = urlRepo {
-                let gitService = GitService()
-                if let currentRepo = try await gitService.getRemoteRepo() {
-                    if currentRepo.lowercased() != urlRepo.lowercased() {
-                        throw SourceError.repoMismatch(expected: urlRepo, actual: currentRepo)
-                    }
-                }
-            }
-
-            // Determine repo: prefer URL repo, fall back to config
-            let repo = urlRepo ?? config.sources?.github?.repo
-            guard let repo = repo else {
-                throw SourceError.githubNotConfigured
-            }
-
+            let repo = try await resolveGitHubRepo(urlRepo: urlRepo, config: config)
             let client = GitHubClient(repo: repo)
             return try await client.fetchIssue(issueNumber)
+
+        case .githubPR(let prNumber, let urlRepo):
+            let repo = try await resolveGitHubRepo(urlRepo: urlRepo, config: config)
+            let client = GitHubClient(repo: repo)
+            return try await client.fetchPR(prNumber)
 
         case .rawPrompt(let prompt):
             return TicketContext.fromRawPrompt(prompt)
         }
+    }
+
+    /// Resolve the GitHub repo to use - from URL, config, or current git remote
+    private func resolveGitHubRepo(urlRepo: String?, config: SproutConfig) async throws -> String {
+        // If repo was extracted from URL, validate it matches current repo
+        if let urlRepo = urlRepo {
+            let gitService = GitService()
+            if let currentRepo = try await gitService.getRemoteRepo() {
+                if currentRepo.lowercased() != urlRepo.lowercased() {
+                    throw SourceError.repoMismatch(expected: urlRepo, actual: currentRepo)
+                }
+            }
+            return urlRepo
+        }
+
+        // Try config repo
+        if let configRepo = config.sources?.github?.repo {
+            return configRepo
+        }
+
+        // Try to get repo from current git remote
+        let gitService = GitService()
+        if let remoteRepo = try await gitService.getRemoteRepo() {
+            return remoteRepo
+        }
+
+        throw SourceError.githubNotConfigured
     }
 
     // MARK: - Variable Building
@@ -168,13 +202,24 @@ struct Launch: AsyncParsableCommand {
         // Extract repo name from path (e.g., "FreshWall" from "/Users/gage/Dev/Startups/FreshWall")
         let repoName = URL(fileURLWithPath: repoRoot).lastPathComponent
 
-        // Compute branch name
-        let branchTemplate = config.worktree?.resolvedBranchTemplate ?? "{ticket_id}"
-        let branchName = self.branch ?? interpolate(branchTemplate, with: [
-            "ticket_id": context.ticketId,
-            "slug": context.slug ?? Slugify.slugify(context.title ?? context.ticketId),
-            "user": config.variables?["user"] ?? "",
-        ])
+        // Compute branch name:
+        // 1. Explicit --branch flag takes priority
+        // 2. For PRs, use the PR's source branch
+        // 3. Otherwise, use the branch template
+        let branchName: String
+        if let explicitBranch = self.branch {
+            branchName = explicitBranch
+        } else if let sourceBranch = context.sourceBranch {
+            // PRs already have a branch - use it
+            branchName = sourceBranch
+        } else {
+            let branchTemplate = config.worktree?.resolvedBranchTemplate ?? "{ticket_id}"
+            branchName = interpolate(branchTemplate, with: [
+                "ticket_id": context.ticketId,
+                "slug": context.slug ?? Slugify.slugify(context.title ?? context.ticketId),
+                "user": config.variables?["user"] ?? "",
+            ])
+        }
 
         // Compute worktree path
         let pathTemplate = config.worktree?.resolvedPathTemplate ?? "../worktrees/{branch}"
@@ -238,6 +283,87 @@ struct Launch: AsyncParsableCommand {
     private func composePrompt(context: TicketContext, config: SproutConfig, variables: [String: String]) throws -> String {
         let composer = PromptComposer(config: config.prompt)
         return try composer.compose(context: context, variables: variables)
+    }
+
+    // MARK: - Worktree Management
+
+    /// Ensure a worktree exists at the given path, creating it if needed.
+    /// Returns true if worktree already existed, false if it was created.
+    private func ensureWorktreeExists(at path: String, branch: String, hasPRBranch: Bool, dryRun: Bool) async throws -> Bool {
+        let gitService = GitService()
+
+        // Check if worktree already exists at this path
+        let existingWorktrees = try await gitService.listWorktrees()
+        if existingWorktrees.contains(where: { $0.path == path }) {
+            if verbose {
+                print("Worktree already exists at \(path)")
+            }
+            return true
+        }
+
+        // Ensure parent directory exists
+        let parentDir = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        if !FileManager.default.fileExists(atPath: parentDir) {
+            if dryRun {
+                print("Would create directory: \(parentDir)")
+            } else {
+                try FileManager.default.createDirectory(atPath: parentDir, withIntermediateDirectories: true)
+                if verbose {
+                    print("Created directory: \(parentDir)")
+                }
+            }
+        }
+
+        if dryRun {
+            print("Would create worktree at \(path) with branch \(branch)")
+            return false
+        }
+
+        // For PRs, the branch already exists remotely - fetch and use it
+        if hasPRBranch {
+            // Fetch the branch from remote
+            if verbose {
+                print("Fetching branch \(branch) from remote...")
+            }
+            try await gitService.fetchBranch(branch)
+
+            // Create worktree from existing branch
+            do {
+                try await gitService.createWorktreeFromExisting(at: path, branch: branch)
+                if verbose {
+                    print("Created worktree from existing branch: \(branch)")
+                }
+                return false
+            } catch {
+                throw GitError.worktreeCreationFailed("Failed to create worktree from PR branch '\(branch)': \(error)")
+            }
+        }
+
+        // For non-PR sources, try to create a new branch
+        let branchExists = try await gitService.branchExists(branch)
+        if branchExists {
+            // Branch exists - create worktree from existing branch
+            do {
+                try await gitService.createWorktreeFromExisting(at: path, branch: branch)
+                if verbose {
+                    print("Created worktree from existing branch: \(branch)")
+                }
+            } catch {
+                throw GitError.worktreeCreationFailed("Branch '\(branch)' exists but worktree creation failed: \(error)")
+            }
+        } else {
+            // Create new branch with worktree
+            do {
+                try await gitService.createWorktree(at: path, branch: branch)
+                if verbose {
+                    print("Created worktree with new branch: \(branch)")
+                }
+            } catch {
+                throw GitError.worktreeCreationFailed("Failed to create worktree: \(error)")
+            }
+        }
+
+        return false
     }
 
     // MARK: - Script Execution

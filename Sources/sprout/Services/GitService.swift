@@ -176,6 +176,29 @@ struct GitService {
         )
     }
 
+    /// Fetch a specific branch from the remote
+    func fetchBranch(_ branch: String) async throws {
+        let result = try await Subprocess.run(
+            .name("git"),
+            arguments: ["fetch", "origin", "\(branch):\(branch)"],
+            input: .none,
+            output: .string(limit: 4096),
+            error: .string(limit: 4096)
+        )
+
+        // Ignore errors - the branch might already be up to date or local
+        if !result.terminationStatus.isSuccess {
+            // Try a simple fetch if the refspec fails
+            _ = try await Subprocess.run(
+                .name("git"),
+                arguments: ["fetch", "origin", branch],
+                input: .none,
+                output: .discarded,
+                error: .discarded
+            )
+        }
+    }
+
     /// Check if a branch exists locally or remotely
     func branchExists(_ branch: String) async throws -> Bool {
         // Check local

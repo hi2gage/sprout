@@ -23,6 +23,29 @@ struct TicketContext {
     /// Labels/tags
     let labels: [String]?
 
+    /// Source branch name (for PRs that already have a branch)
+    let sourceBranch: String?
+
+    init(
+        ticketId: String,
+        title: String? = nil,
+        description: String? = nil,
+        slug: String? = nil,
+        url: String? = nil,
+        author: String? = nil,
+        labels: [String]? = nil,
+        sourceBranch: String? = nil
+    ) {
+        self.ticketId = ticketId
+        self.title = title
+        self.description = description
+        self.slug = slug
+        self.url = url
+        self.author = author
+        self.labels = labels
+        self.sourceBranch = sourceBranch
+    }
+
     /// Create a context from a raw prompt
     static func fromRawPrompt(_ prompt: String) -> TicketContext {
         let slug = Slugify.slugify(prompt)

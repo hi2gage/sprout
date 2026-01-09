@@ -12,9 +12,15 @@ struct InputDetector {
             return .jira(jiraId)
         }
 
-        // Check for GitHub URL pattern
+        // Check for GitHub PR URL pattern first (before issues)
+        // e.g., https://github.com/org/repo/pull/567
+        if let (prNumber, repo) = extractGitHubPRFromURL(trimmed) {
+            return .githubPR(prNumber, repo: repo)
+        }
+
+        // Check for GitHub issue URL pattern
         // e.g., https://github.com/org/repo/issues/567
-        if let (issueNumber, repo) = extractGitHubFromURL(trimmed) {
+        if let (issueNumber, repo) = extractGitHubIssueFromURL(trimmed) {
             return .github(issueNumber, repo: repo)
         }
 
@@ -23,7 +29,12 @@ struct InputDetector {
             return .jira(String(match.1))
         }
 
-        // Check for GitHub shorthand patterns: #567 or gh:567
+        // Check for GitHub PR shorthand pattern: pr:567
+        if let match = trimmed.wholeMatch(of: /^(?i)pr:(\d+)$/) {
+            return .githubPR(String(match.1), repo: nil)
+        }
+
+        // Check for GitHub issue shorthand patterns: #567 or gh:567
         if let match = trimmed.wholeMatch(of: /^#(\d+)$/) {
             return .github(String(match.1), repo: nil)
         }
@@ -47,9 +58,20 @@ struct InputDetector {
 
     /// Extract GitHub issue number and repo from a GitHub URL
     /// Returns (issueNumber, "owner/repo")
-    private static func extractGitHubFromURL(_ url: String) -> (String, String)? {
+    private static func extractGitHubIssueFromURL(_ url: String) -> (String, String)? {
         // Pattern: github.com/owner/repo/issues/123
         let pattern = /github\.com\/([^\/]+\/[^\/]+)\/issues\/(\d+)/
+        guard let match = url.firstMatch(of: pattern) else {
+            return nil
+        }
+        return (String(match.2), String(match.1))
+    }
+
+    /// Extract GitHub PR number and repo from a GitHub URL
+    /// Returns (prNumber, "owner/repo")
+    private static func extractGitHubPRFromURL(_ url: String) -> (String, String)? {
+        // Pattern: github.com/owner/repo/pull/123
+        let pattern = /github\.com\/([^\/]+\/[^\/]+)\/pull\/(\d+)/
         guard let match = url.firstMatch(of: pattern) else {
             return nil
         }

@@ -8,6 +8,9 @@ enum InputSource: CustomStringConvertible {
     /// GitHub issue number (e.g., "567"), with optional repo from URL
     case github(String, repo: String?)
 
+    /// GitHub pull request number (e.g., "567"), with optional repo from URL
+    case githubPR(String, repo: String?)
+
     /// Raw prompt text
     case rawPrompt(String)
 
@@ -20,6 +23,11 @@ enum InputSource: CustomStringConvertible {
                 return "GitHub(\(repo)#\(number))"
             }
             return "GitHub(#\(number))"
+        case .githubPR(let number, let repo):
+            if let repo = repo {
+                return "GitHubPR(\(repo)#\(number))"
+            }
+            return "GitHubPR(#\(number))"
         case .rawPrompt(let prompt):
             let truncated = prompt.prefix(30)
             return "RawPrompt(\"\(truncated)...\")"
