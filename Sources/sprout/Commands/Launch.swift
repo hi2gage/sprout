@@ -60,8 +60,34 @@ struct Launch: AsyncParsableCommand {
             print("Loaded config from: \(configPath)")
         }
 
+        // Check for comma-separated inputs (batch mode)
+        if input.contains(",") {
+            let tickets = input.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            if verbose {
+                print("Batch mode: \(tickets.count) tickets")
+            }
+            for (index, ticket) in tickets.enumerated() {
+                if verbose {
+                    print("[\(index + 1)/\(tickets.count)] Processing: \(ticket)")
+                }
+                try await launchSingle(ticket, config: sproutConfig)
+                // Small delay between launches so iTerm windows don't collide
+                if index < tickets.count - 1 {
+                    try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+                }
+            }
+            return
+        }
+
+        // Single input mode
+        try await launchSingle(input, config: sproutConfig)
+    }
+
+    // MARK: - Single Launch
+
+    private func launchSingle(_ inputString: String, config sproutConfig: SproutConfig) async throws {
         // Determine input source
-        let source = try detectInputSource()
+        let source = detectInputSource(from: inputString)
 
         if verbose {
             print("Detected source: \(source)")
@@ -98,15 +124,34 @@ struct Launch: AsyncParsableCommand {
         )
         variables["worktree_created"] = worktreeExists ? "false" : "true"
 
-        // Compose and write prompt file
-        let promptFile = try composePrompt(context: context, config: sproutConfig, variables: variables)
+        // Determine which script to use (PR vs regular ticket)
+        let isPR = context.sourceBranch != nil
+        let launchScript = isPR ? sproutConfig.launch.resolvedPRScript : sproutConfig.launch.script
 
-        if verbose {
-            print("Wrote prompt to: \(promptFile)")
+        // Compose prompt content (for non-PR sources)
+        if !isPR {
+            let promptContent = composePromptContent(context: context, config: sproutConfig, variables: variables)
+
+            // Escape prompt for AppleScript/shell use
+            let escapedPrompt = promptContent
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "'", with: "'\\''")  // Escape single quotes for osascript -e '...'
+                .replacingOccurrences(of: "\n", with: "\\n")
+            variables["prompt"] = escapedPrompt
+
+            // Only write prompt file if the script uses {prompt_file}
+            if launchScript.contains("{prompt_file}") {
+                let promptFile = try writePromptFile(promptContent, variables: variables)
+                variables["prompt_file"] = promptFile
+                if verbose {
+                    print("Wrote prompt to: \(promptFile)")
+                }
+            }
         }
 
         // Interpolate and execute launch script
-        let script = interpolate(sproutConfig.launch.script, with: variables.merging(["prompt_file": promptFile]) { _, new in new })
+        let script = interpolate(launchScript, with: variables)
 
         if dryRun {
             print("Would execute:")
@@ -121,8 +166,8 @@ struct Launch: AsyncParsableCommand {
 
     // MARK: - Input Detection
 
-    private func detectInputSource() throws -> InputSource {
-        // Explicit flags take precedence
+    private func detectInputSource(from inputString: String) -> InputSource {
+        // Explicit flags take precedence (only for single input mode)
         if let jira = jiraTicket {
             return .jira(jira)
         }
@@ -137,7 +182,7 @@ struct Launch: AsyncParsableCommand {
         }
 
         // Auto-detect from input
-        return InputDetector.detect(input)
+        return InputDetector.detect(inputString)
     }
 
     // MARK: - Context Fetching
@@ -221,10 +266,14 @@ struct Launch: AsyncParsableCommand {
             ])
         }
 
-        // Compute worktree path
+        // Compute worktree path - sanitize branch name to avoid nested directories
+        let sanitizedBranchForPath = branchName
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "\\", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
         let pathTemplate = config.worktree?.resolvedPathTemplate ?? "../worktrees/{branch}"
         let worktreePath = interpolate(pathTemplate, with: [
-            "branch": branchName,
+            "branch": sanitizedBranchForPath,
             "repo_name": repoName,
         ])
         let absoluteWorktreePath: String
@@ -280,9 +329,28 @@ struct Launch: AsyncParsableCommand {
 
     // MARK: - Prompt Composition
 
-    private func composePrompt(context: TicketContext, config: SproutConfig, variables: [String: String]) throws -> String {
+    private func composePromptContent(context: TicketContext, config: SproutConfig, variables: [String: String]) -> String {
         let composer = PromptComposer(config: config.prompt)
-        return try composer.compose(context: context, variables: variables)
+        return composer.composeContent(context: context, variables: variables)
+    }
+
+    private func writePromptFile(_ content: String, variables: [String: String]) throws -> String {
+        let promptsDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".sprout")
+            .appendingPathComponent("prompts")
+
+        try FileManager.default.createDirectory(at: promptsDir, withIntermediateDirectories: true)
+
+        let branch = variables["branch"] ?? "prompt"
+        let sanitizedBranch = branch
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "\\", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+        let filename = "\(sanitizedBranch).md"
+        let promptFile = promptsDir.appendingPathComponent(filename)
+
+        try content.write(to: promptFile, atomically: true, encoding: .utf8)
+        return promptFile.path
     }
 
     // MARK: - Worktree Management

@@ -4,9 +4,9 @@ import Foundation
 struct PromptComposer {
     let config: PromptConfig?
 
-    /// Compose the prompt and write it to ~/.sprout/prompts/
-    /// - Returns: Path to the prompt file
-    func compose(context: TicketContext, variables: [String: String]) throws -> String {
+    /// Compose the prompt content
+    /// - Returns: The composed prompt string
+    func composeContent(context: TicketContext, variables: [String: String]) -> String {
         var parts: [String] = []
 
         // Add prefix if configured
@@ -26,23 +26,6 @@ struct PromptComposer {
             parts.append(interpolated.trimmingCharacters(in: .whitespacesAndNewlines))
         }
 
-        let fullPrompt = parts.joined(separator: "\n\n")
-
-        // Write to ~/.sprout/prompts/
-        let promptsDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".sprout")
-            .appendingPathComponent("prompts")
-
-        // Create directory if needed
-        try FileManager.default.createDirectory(at: promptsDir, withIntermediateDirectories: true)
-
-        // Use branch name for filename
-        let branch = variables["branch"] ?? "prompt"
-        let filename = "\(branch).md"
-        let promptFile = promptsDir.appendingPathComponent(filename)
-
-        try fullPrompt.write(to: promptFile, atomically: true, encoding: .utf8)
-
-        return promptFile.path
+        return parts.joined(separator: "\n\n")
     }
 }

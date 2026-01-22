@@ -1,11 +1,4 @@
 import Foundation
-import Subprocess
-
-#if canImport(System)
-import System
-#else
-import SystemPackage
-#endif
 
 /// Executes the launch script
 struct ScriptRunner {
@@ -18,38 +11,34 @@ struct ScriptRunner {
             print("---")
         }
 
-        let result = try await Subprocess.run(
-            .path(FilePath("/bin/sh")),
-            arguments: ["-c", script],
-            output: .string(limit: 65536),
-            error: .string(limit: 65536)
-        )
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", script]
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        try process.run()
+        process.waitUntilExit()
 
         // Print output if any
-        if let stdout = result.standardOutput {
-            let trimmed = stdout.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                print(trimmed)
-            }
+        let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+        if let outStr = String(data: outData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !outStr.isEmpty {
+            print(outStr)
         }
 
-        if let stderr = result.standardError {
-            let trimmed = stderr.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                FileHandle.standardError.write(Data(trimmed.utf8))
-                FileHandle.standardError.write(Data("\n".utf8))
-            }
+        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+        if let errStr = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !errStr.isEmpty {
+            FileHandle.standardError.write(Data(errStr.utf8))
+            FileHandle.standardError.write(Data("\n".utf8))
         }
 
-        guard result.terminationStatus.isSuccess else {
-            let code: Int
-            switch result.terminationStatus {
-            case .exited(let exitCode):
-                code = Int(exitCode)
-            case .unhandledException(let exception):
-                code = Int(exception)
-            }
-            throw ScriptError.executionFailed(code)
+        guard process.terminationStatus == 0 else {
+            throw ScriptError.executionFailed(Int(process.terminationStatus))
         }
     }
 }

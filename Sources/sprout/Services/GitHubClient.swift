@@ -3,33 +3,24 @@ import Foundation
 /// Client for fetching issues from GitHub API
 struct GitHubClient {
     let repo: String
-    let token: String?
 
-    /// Initialize with just a repo (token from env)
     init(repo: String) {
         self.repo = repo
-        self.token = nil
     }
 
-    /// Initialize with config (for backwards compatibility)
     init(config: GitHubConfig) {
         self.repo = config.repo ?? ""
-        self.token = config.token
     }
 
     /// Fetch an issue by its number
     func fetchIssue(_ issueNumber: String) async throws -> TicketContext {
         let token = try getToken()
 
-        // Build URL
         guard let url = URL(string: "https://api.github.com/repos/\(repo)/issues/\(issueNumber)") else {
             throw SourceError.networkError(URLError(.badURL))
         }
 
-        // Make request
         let data = try await makeRequest(url: url, token: token, errorId: "#\(issueNumber)")
-
-        // Parse response
         let issue = try JSONDecoder().decode(GitHubIssue.self, from: data)
         return issue.toTicketContext()
     }
@@ -38,30 +29,49 @@ struct GitHubClient {
     func fetchPR(_ prNumber: String) async throws -> TicketContext {
         let token = try getToken()
 
-        // Build URL
         guard let url = URL(string: "https://api.github.com/repos/\(repo)/pulls/\(prNumber)") else {
             throw SourceError.networkError(URLError(.badURL))
         }
 
-        // Make request
         let data = try await makeRequest(url: url, token: token, errorId: "PR #\(prNumber)")
-
-        // Parse response
         let pr = try JSONDecoder().decode(GitHubPR.self, from: data)
         return pr.toTicketContext()
     }
 
     // MARK: - Private Helpers
 
+    /// Get token from gh CLI, env var, or config
     private func getToken() throws -> String {
-        // Get token from environment or init
-        // Use SPROUT_GITHUB_TOKEN to avoid conflicts with gh CLI
-        guard let token = ProcessInfo.processInfo.environment["SPROUT_GITHUB_TOKEN"]
-            ?? ProcessInfo.processInfo.environment["GITHUB_TOKEN"]
-            ?? token else {
-            throw SourceError.authFailed("GitHub: SPROUT_GITHUB_TOKEN or GITHUB_TOKEN not set")
+        // Try gh auth token first (uses gh CLI's stored credentials)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["gh", "auth", "token"]
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            if process.terminationStatus == 0 {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let token = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !token.isEmpty {
+                    return token
+                }
+            }
+        } catch {
+            // Fall through to env var check
         }
-        return token
+
+        // Fall back to environment variables
+        if let token = ProcessInfo.processInfo.environment["GITHUB_TOKEN"] {
+            return token
+        }
+
+        throw SourceError.authFailed("GitHub: run 'gh auth login' or set GITHUB_TOKEN")
     }
 
     private func makeRequest(url: URL, token: String, errorId: String) async throws -> Data {
@@ -144,7 +154,7 @@ private struct GitHubPR: Decodable {
     }
 
     struct GitHubBranch: Decodable {
-        let ref: String  // Branch name
+        let ref: String
     }
 
     enum CodingKeys: String, CodingKey {

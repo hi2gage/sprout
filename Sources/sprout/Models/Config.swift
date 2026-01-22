@@ -69,8 +69,21 @@ struct PromptConfig: Codable {
 
 /// Launch script configuration
 struct LaunchConfig: Codable {
-    /// Shell script executed after worktree creation
+    /// Shell script executed after worktree creation (for new tickets)
     var script: String
+
+    /// Shell script for PRs (defaults to script if not set)
+    var prScript: String?
+
+    enum CodingKeys: String, CodingKey {
+        case script
+        case prScript = "pr_script"
+    }
+
+    /// Get the appropriate script for PRs
+    var resolvedPRScript: String {
+        prScript ?? script
+    }
 }
 
 /// Source-specific configurations

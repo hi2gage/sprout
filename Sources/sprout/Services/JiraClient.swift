@@ -6,13 +6,19 @@ struct JiraClient {
 
     /// Fetch a ticket by its ID (e.g., "IOS-1234")
     func fetchTicket(_ ticketId: String) async throws -> TicketContext {
-        // Get API token from environment or config
-        guard let token = ProcessInfo.processInfo.environment["JIRA_API_TOKEN"] ?? config.token else {
-            throw SourceError.authFailed("Jira: JIRA_API_TOKEN not set")
+        // Get credentials from environment (like fetch CLI does) or fall back to config
+        let env = ProcessInfo.processInfo.environment
+
+        guard let token = env["JIRA_TOKEN"] ?? env["JIRA_API_TOKEN"] ?? config.token else {
+            throw SourceError.authFailed("Jira: JIRA_TOKEN or JIRA_API_TOKEN not set")
         }
 
-        // Build URL
-        let baseUrl = config.baseUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let email = env["JIRA_EMAIL"] ?? env["JIRA_USER"] ?? Optional(config.email) else {
+            throw SourceError.authFailed("Jira: JIRA_EMAIL not set")
+        }
+
+        // Build URL - use env var or config for base URL
+        let baseUrl = (env["JIRA_BASE_URL"] ?? config.baseUrl).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: "\(baseUrl)/rest/api/3/issue/\(ticketId)") else {
             throw SourceError.networkError(URLError(.badURL))
         }
@@ -22,7 +28,7 @@ struct JiraClient {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let credentials = "\(config.email):\(token)"
+        let credentials = "\(email):\(token)"
         if let credentialsData = credentials.data(using: .utf8) {
             let base64Credentials = credentialsData.base64EncodedString()
             request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
