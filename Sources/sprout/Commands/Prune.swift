@@ -24,6 +24,9 @@ struct Prune: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Show what would be deleted without deleting")
     var dryRun: Bool = false
 
+    @Flag(name: .long, help: "Read branch names from stdin (one per line)")
+    var stdin: Bool = false
+
     @Argument(help: "Branch name or pattern to prune (optional - launches picker if not provided)")
     var branch: String?
 
@@ -41,7 +44,28 @@ struct Prune: AsyncParsableCommand {
 
         // Filter if branch pattern provided
         let toRemove: [(path: String, branch: String)]
-        if let branch = branch {
+
+        if stdin {
+            // Read branch names from stdin
+            var branches: [String] = []
+            while let line = readLine() {
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    branches.append(trimmed)
+                }
+            }
+
+            if branches.isEmpty {
+                print("No branches provided via stdin.")
+                return
+            }
+
+            toRemove = worktrees.filter { branches.contains($0.branch) }
+            if toRemove.isEmpty {
+                print("No matching worktrees found for provided branches.")
+                return
+            }
+        } else if let branch = branch {
             toRemove = worktrees.filter { $0.branch.contains(branch) }
             if toRemove.isEmpty {
                 print("No worktrees matching '\(branch)' found.")
