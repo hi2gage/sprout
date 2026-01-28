@@ -13,7 +13,7 @@ mint install hi2gage/sprout
 ### From Source
 
 ```bash
-git clone https://github.com/gagehalverson/sprout.git
+git clone https://github.com/hi2gage/sprout.git
 cd sprout
 swift build -c release
 cp .build/release/sprout /usr/local/bin/
