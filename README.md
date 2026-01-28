@@ -7,7 +7,7 @@ A CLI tool that creates git worktrees and launches Claude Code with contextual p
 ### Using Mint
 
 ```bash
-mint install gagehalverson/sprout
+mint install hi2gage/sprout
 ```
 
 ### From Source
