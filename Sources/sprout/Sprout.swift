@@ -7,7 +7,7 @@ struct Sprout: AsyncParsableCommand {
         commandName: "sprout",
         abstract: "Create git worktrees and launch Claude Code with context from various sources.",
         version: "0.1.0",
-        subcommands: [Launch.self, Prune.self],
+        subcommands: [Launch.self, List.self, Prune.self],
         defaultSubcommand: Launch.self
     )
 }

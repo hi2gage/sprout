@@ -87,8 +87,8 @@ struct GitService {
         return nil
     }
 
-    /// List all worktrees (excluding the main one)
-    func listWorktrees() async throws -> [(path: String, branch: String)] {
+    /// List all worktrees (excluding the main one by default).
+    func listWorktrees(includeMain: Bool = false) async throws -> [(path: String, branch: String)] {
         let result = try runWithStderr(["worktree", "list", "--porcelain"])
         guard result.success else { return [] }
 
@@ -115,9 +115,17 @@ struct GitService {
             worktrees.append((path: path, branch: branch))
         }
 
-        // Filter out main worktree (it won't have a branch in the same format typically)
-        // and only return worktrees that are in a "worktrees" directory
+        // Filter out main worktree unless requested
+        if includeMain {
+            return worktrees
+        }
         return worktrees.filter { $0.path.contains("worktrees") }
+    }
+
+    /// Find an existing worktree by branch name (returns the path if found)
+    func findWorktreeByBranch(_ branch: String) async throws -> String? {
+        let worktrees = try await listWorktrees()
+        return worktrees.first { $0.branch == branch }?.path
     }
 
     /// Remove a worktree
