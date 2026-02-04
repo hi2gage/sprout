@@ -30,12 +30,24 @@ struct Prune: AsyncParsableCommand {
     @Argument(help: "Branch name or pattern to prune (optional - launches picker if not provided)")
     var branch: String?
 
+    @Flag(name: [.short, .long], help: "Print verbose output")
+    var verbose: Bool = false
+
     @MainActor
     func run() async throws {
         let gitService = GitService()
+        let hooksService = HooksService()
 
         // Get list of worktrees
         let worktrees = try await gitService.listWorktrees()
+
+        // Find the main repo root for hooks
+        let mainRepoRoot: String?
+        if let firstWorktree = worktrees.first {
+            mainRepoRoot = hooksService.findMainRepoRoot(from: firstWorktree.path)
+        } else {
+            mainRepoRoot = try? await gitService.getRepoRoot()
+        }
 
         if worktrees.isEmpty {
             print("No worktrees found.")
@@ -132,13 +144,44 @@ struct Prune: AsyncParsableCommand {
         for wt in toRemove {
             if dryRun {
                 print("Would remove: \(wt.branch) (\(wt.path))")
+                if let repoRoot = mainRepoRoot {
+                    let hookPath = "\(repoRoot)/.sprout/hooks/post-prune"
+                    if FileManager.default.fileExists(atPath: hookPath) {
+                        print("  Would run post-prune hook")
+                    }
+                }
             } else {
                 print("Removing \(wt.branch)...", terminator: " ")
                 fflush(stdout)
                 do {
+                    // Capture worktree path before removal for hook
+                    let worktreePath = wt.path
+
                     try await gitService.removeWorktree(at: wt.path)
                     try await gitService.deleteBranch(wt.branch)
                     print("done")
+
+                    // Run post-prune hook if it exists
+                    if let repoRoot = mainRepoRoot {
+                        let env = HooksService.HookEnvironment(
+                            worktreePath: worktreePath,
+                            branch: wt.branch,
+                            repoRoot: repoRoot
+                        )
+                        do {
+                            let hookRan = try await hooksService.run(
+                                .postPrune,
+                                in: repoRoot,
+                                environment: env,
+                                verbose: verbose
+                            )
+                            if hookRan && verbose {
+                                print("  post-prune hook completed")
+                            }
+                        } catch {
+                            print("  post-prune hook failed: \(error)")
+                        }
+                    }
                 } catch {
                     print("error: \(error)")
                 }
