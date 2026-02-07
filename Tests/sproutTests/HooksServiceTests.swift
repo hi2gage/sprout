@@ -18,4 +18,55 @@ struct HooksServiceTests {
             #expect(hooks.findMainRepoRoot(from: worktree.path) == dir.path)
         }
     }
+
+    @Test("returns false for non-executable hook", .tags(.service))
+    func hooksServiceNonExecutableHook() async throws {
+        try await withTemporaryDirectory { dir in
+            let hooksDir = dir.appendingPathComponent(".sprout/hooks")
+            try FileManager.default.createDirectory(at: hooksDir, withIntermediateDirectories: true)
+
+            let hookPath = hooksDir.appendingPathComponent("post-prune")
+            let script = """
+            #!/bin/sh
+            echo should-not-run
+            """
+            try script.write(to: hookPath, atomically: true, encoding: .utf8)
+
+            let hooks = HooksService()
+            let didRun = try await hooks.run(
+                .postPrune,
+                in: dir.path,
+                environment: .init(repoRoot: dir.path),
+                verbose: false
+            )
+            #expect(didRun == false)
+        }
+    }
+
+    @Test("throws when hook exits non-zero", .tags(.service))
+    func hooksServiceHookFailure() async throws {
+        try await withTemporaryDirectory { dir in
+            let hooksDir = dir.appendingPathComponent(".sprout/hooks")
+            try FileManager.default.createDirectory(at: hooksDir, withIntermediateDirectories: true)
+
+            let hookPath = hooksDir.appendingPathComponent("post-prune")
+            let script = """
+            #!/bin/sh
+            exit 9
+            """
+            try script.write(to: hookPath, atomically: true, encoding: .utf8)
+            _ = try runProcess(["chmod", "+x", hookPath.path])
+
+            let hooks = HooksService()
+            await #expect(throws: HookError.self) {
+                try await hooks.run(
+                    .postPrune,
+                    in: dir.path,
+                    environment: .init(repoRoot: dir.path),
+                    verbose: false
+                )
+            }
+        }
+    }
+
 }

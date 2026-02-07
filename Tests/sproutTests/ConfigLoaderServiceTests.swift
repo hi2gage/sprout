@@ -26,4 +26,21 @@ struct ConfigLoaderServiceTests {
             try ConfigLoader.load(from: "/tmp/definitely-missing-sprout-config.toml")
         }
     }
+
+    @Test("throws for invalid TOML", .tags(.service))
+    func configLoaderInvalidTOML() throws {
+        try withTemporaryDirectory { dir in
+            let configFile = dir.appendingPathComponent("config.toml")
+            let invalidTOML = """
+            [launch
+            script = "echo hi"
+            """
+            try invalidTOML.write(to: configFile, atomically: true, encoding: .utf8)
+
+            #expect(throws: ConfigError.self) {
+                try ConfigLoader.load(from: configFile.path)
+            }
+        }
+    }
+
 }

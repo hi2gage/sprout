@@ -94,6 +94,6 @@ user = "your-username"
 
 ## Requirements
 
-- macOS 15+
-- Swift 6.1+
+- Swift 6.2+
 - Git
+- Linux or macOS
