@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Client for fetching issues from GitHub API
 struct GitHubClient {
@@ -95,7 +98,7 @@ struct GitHubClient {
         case 404:
             throw SourceError.ticketNotFound(errorId)
         default:
-            throw SourceError.networkError(URLError(.init(rawValue: httpResponse.statusCode)))
+            throw SourceError.networkError(URLError(.badServerResponse))
         }
     }
 }

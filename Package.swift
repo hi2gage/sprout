@@ -22,5 +22,9 @@ let package = Package(
                 .product(name: "FuzzyTUI", package: "tui-fuzzy-finder"),
             ]
         ),
+        .testTarget(
+            name: "sproutTests",
+            dependencies: ["sprout"]
+        ),
     ]
 )

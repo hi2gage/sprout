@@ -1,5 +1,4 @@
 import ArgumentParser
-import Darwin
 import Foundation
 import FuzzyTUI
 
@@ -133,7 +132,6 @@ struct Prune: AsyncParsableCommand {
                 print("  - \(wt.branch)")
             }
             print("\nConfirm? [y/N]: ", terminator: "")
-            fflush(stdout)
             guard let confirm = readLine()?.lowercased(), confirm == "y" || confirm == "yes" else {
                 print("Cancelled.")
                 return
@@ -152,7 +150,6 @@ struct Prune: AsyncParsableCommand {
                 }
             } else {
                 print("Removing \(wt.branch)...", terminator: " ")
-                fflush(stdout)
                 do {
                     // Capture worktree path before removal for hook
                     let worktreePath = wt.path

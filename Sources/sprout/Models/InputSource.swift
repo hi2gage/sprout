@@ -1,7 +1,7 @@
 import Foundation
 
 /// Represents the detected source type for the input
-enum InputSource: CustomStringConvertible {
+enum InputSource: CustomStringConvertible, Equatable {
     /// Jira ticket (e.g., "IOS-1234")
     case jira(String)
 

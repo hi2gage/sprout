@@ -2,11 +2,18 @@ import Foundation
 
 /// Git operations using Foundation Process
 struct GitService {
+    let workingDirectoryURL: URL?
+
+    init(workingDirectoryURL: URL? = nil) {
+        self.workingDirectoryURL = workingDirectoryURL
+    }
+
     /// Run a git command and return stdout
     private func run(_ arguments: [String]) throws -> String {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = arguments
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["git"] + arguments
+        process.currentDirectoryURL = workingDirectoryURL
 
         let stdout = Pipe()
         process.standardOutput = stdout
@@ -22,8 +29,9 @@ struct GitService {
     /// Run a git command, capturing stderr too
     private func runWithStderr(_ arguments: [String]) throws -> (stdout: String, stderr: String, success: Bool) {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = arguments
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["git"] + arguments
+        process.currentDirectoryURL = workingDirectoryURL
 
         let stdout = Pipe()
         let stderr = Pipe()
