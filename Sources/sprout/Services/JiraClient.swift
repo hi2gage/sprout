@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Client for fetching tickets from Jira API
 struct JiraClient {
@@ -49,7 +52,7 @@ struct JiraClient {
         case 404:
             throw SourceError.ticketNotFound(ticketId)
         default:
-            throw SourceError.networkError(URLError(.init(rawValue: httpResponse.statusCode)))
+            throw SourceError.networkError(URLError(.badServerResponse))
         }
 
         // Parse response
