@@ -1,7 +1,16 @@
 import ArgumentParser
-import Darwin
+#if canImport(Darwin)
+@preconcurrency import Darwin
+#elseif canImport(Glibc)
+@preconcurrency import Glibc
+#endif
 import Foundation
 import FuzzyTUI
+
+/// Flush stdout to ensure prompt text appears before reading input
+private func flushStdout() {
+    fflush(stdout)
+}
 
 /// Represents a worktree for display in the fuzzy finder
 struct WorktreeItem: CustomStringConvertible, Hashable, Sendable, Equatable {
@@ -133,7 +142,7 @@ struct Prune: AsyncParsableCommand {
                 print("  - \(wt.branch)")
             }
             print("\nConfirm? [y/N]: ", terminator: "")
-            fflush(stdout)
+            flushStdout()
             guard let confirm = readLine()?.lowercased(), confirm == "y" || confirm == "yes" else {
                 print("Cancelled.")
                 return
@@ -152,7 +161,7 @@ struct Prune: AsyncParsableCommand {
                 }
             } else {
                 print("Removing \(wt.branch)...", terminator: " ")
-                fflush(stdout)
+                flushStdout()
                 do {
                     // Capture worktree path before removal for hook
                     let worktreePath = wt.path

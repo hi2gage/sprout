@@ -1,5 +1,5 @@
 {
-  "originHash" : "c048cf872c9237755a5edb59e8fb5bd02c29cfbaeb5353d5c67aa0955d4ce743",
+  "originHash" : "6512fc9dedba3567df4cba96411ae9c60926f0154c6133c36e9b59fe64440cee",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "bc386b95f2a16ccd0150a8235e7c69eab2b866ca",
-        "version" : "1.8.0"
+        "revision" : "2778fd4e5a12a8aaa30a3ee8285f4ce54c5f3181",
+        "version" : "1.9.1"
       }
     },
     {
@@ -47,21 +47,12 @@
       }
     },
     {
-      "identity" : "terminal-ansi",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/juri/terminal-ansi",
-      "state" : {
-        "revision" : "4a56c05d18cd7cb0ad85fcc0bd1b616f45c8a067",
-        "version" : "0.3.0"
-      }
-    },
-    {
       "identity" : "tomldecoder",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/dduan/TOMLDecoder.git",
       "state" : {
-        "revision" : "cb460d67dab263f33e2fc49de2f2ab5307f9bbbb",
-        "version" : "0.4.2"
+        "revision" : "f4388e05c035d6430e94022c353123abc020f1c4",
+        "version" : "0.4.3"
       }
     },
     {
@@ -69,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/juri/tui-fuzzy-finder.git",
       "state" : {
-        "revision" : "17c5cb231aa9ca6f2b37ae7d2f452fb8a5e30daf",
-        "version" : "0.6.0"
+        "revision" : "389e789ffaf6ef1e68091b4fe886cf94ee819587",
+        "version" : "0.5.0"
       }
     }
   ],

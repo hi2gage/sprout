@@ -11,7 +11,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
         .package(url: "https://github.com/dduan/TOMLDecoder.git", from: "0.4.0"),
-        .package(url: "https://github.com/juri/tui-fuzzy-finder.git", from: "0.6.0"),
+        .package(url: "https://github.com/juri/tui-fuzzy-finder.git", exact: "0.5.0"),
     ],
     targets: [
         .executableTarget(
