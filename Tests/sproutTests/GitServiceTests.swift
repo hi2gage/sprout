@@ -17,7 +17,9 @@ struct GitServiceTests {
 
             let service = GitService(workingDirectoryURL: dir)
             let root = try await service.getRepoRoot()
-            #expect(root == dir.path)
+            let normalizedRoot = URL(fileURLWithPath: root).resolvingSymlinksInPath().path
+            let normalizedDir = dir.resolvingSymlinksInPath().path
+            #expect(normalizedRoot == normalizedDir)
             #expect(try await service.branchExists("feature/test-branch"))
             #expect(!(try await service.branchExists("missing/branch")))
         }
