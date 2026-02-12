@@ -124,6 +124,36 @@ struct Launch: AsyncParsableCommand {
         )
         variables["worktree_created"] = worktreeExists ? "false" : "true"
 
+        // Run post-launch hook if it exists
+        let repoRoot = variables["repo_root"]!
+        let hooksService = HooksService()
+        let hookEnv = HooksService.HookEnvironment(
+            worktreePath: worktreePath,
+            branch: branchName,
+            repoRoot: repoRoot
+        )
+
+        if dryRun {
+            let hookPath = "\(repoRoot)/.sprout/hooks/post-launch"
+            if FileManager.default.fileExists(atPath: hookPath) {
+                print("Would run post-launch hook")
+            }
+        } else {
+            do {
+                let hookRan = try await hooksService.run(
+                    .postLaunch,
+                    in: repoRoot,
+                    environment: hookEnv,
+                    verbose: verbose
+                )
+                if hookRan && verbose {
+                    print("post-launch hook completed")
+                }
+            } catch {
+                print("Warning: post-launch hook failed: \(error)")
+            }
+        }
+
         // Determine which script to use (PR vs regular ticket)
         let isPR = context.sourceBranch != nil
         let launchScript = isPR ? sproutConfig.launch.resolvedPRScript : sproutConfig.launch.script
