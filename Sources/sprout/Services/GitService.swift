@@ -74,6 +74,14 @@ struct GitService {
         }
     }
 
+    /// Create a worktree from an existing branch, even if it's checked out in another worktree
+    func createWorktreeFromExistingForce(at path: String, branch: String) async throws {
+        let result = try runWithStderr(["worktree", "add", "--force", path, branch])
+        guard result.success else {
+            throw GitError.worktreeCreationFailed(result.stderr)
+        }
+    }
+
     /// Get the current repo's owner/repo from the remote origin
     /// Returns format like "owner/repo" (e.g., "hi2gage/FreshWall")
     func getRemoteRepo() async throws -> String? {

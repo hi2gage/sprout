@@ -360,6 +360,9 @@ struct Launch: AsyncParsableCommand {
     private func ensureWorktreeExists(at path: String, branch: String, hasPRBranch: Bool, dryRun: Bool) async throws -> Bool {
         let gitService = GitService()
 
+        // Prune stale worktree references before checking
+        try await gitService.pruneWorktrees()
+
         // Check if worktree already exists at this path
         let existingWorktrees = try await gitService.listWorktrees()
         if existingWorktrees.contains(where: { $0.path == path }) {
@@ -395,30 +398,26 @@ struct Launch: AsyncParsableCommand {
             }
             try await gitService.fetchBranch(branch)
 
-            // Create worktree from existing branch
-            do {
-                try await gitService.createWorktreeFromExisting(at: path, branch: branch)
-                if verbose {
-                    print("Created worktree from existing branch: \(branch)")
-                }
-                return false
-            } catch {
-                throw GitError.worktreeCreationFailed("Failed to create worktree from PR branch '\(branch)': \(error)")
-            }
+            // Create worktree from existing branch (with recovery for branch conflicts)
+            try await createWorktreeWithRecovery(
+                gitService: gitService,
+                at: path,
+                branch: branch,
+                isPR: true
+            )
+            return false
         }
 
         // For non-PR sources, try to create a new branch
         let branchExists = try await gitService.branchExists(branch)
         if branchExists {
-            // Branch exists - create worktree from existing branch
-            do {
-                try await gitService.createWorktreeFromExisting(at: path, branch: branch)
-                if verbose {
-                    print("Created worktree from existing branch: \(branch)")
-                }
-            } catch {
-                throw GitError.worktreeCreationFailed("Branch '\(branch)' exists but worktree creation failed: \(error)")
-            }
+            // Branch exists - create worktree from existing branch (with recovery)
+            try await createWorktreeWithRecovery(
+                gitService: gitService,
+                at: path,
+                branch: branch,
+                isPR: false
+            )
         } else {
             // Create new branch with worktree
             do {
@@ -432,6 +431,68 @@ struct Launch: AsyncParsableCommand {
         }
 
         return false
+    }
+
+    /// Create a worktree from an existing branch, with automatic recovery if the branch
+    /// is already checked out in another worktree (stale or active).
+    private func createWorktreeWithRecovery(
+        gitService: GitService,
+        at path: String,
+        branch: String,
+        isPR: Bool
+    ) async throws {
+        do {
+            try await gitService.createWorktreeFromExisting(at: path, branch: branch)
+            if verbose {
+                print("Created worktree from existing branch: \(branch)")
+            }
+        } catch {
+            let errorMessage = String(describing: error)
+            guard errorMessage.contains("is already used by worktree") else {
+                let context = isPR ? "PR branch" : "Branch"
+                throw GitError.worktreeCreationFailed("\(context) '\(branch)' worktree creation failed: \(error)")
+            }
+
+            // Branch is locked by another worktree - attempt recovery
+            let conflictingPath = parseConflictingWorktreePath(from: errorMessage)
+            let conflictingExists = conflictingPath.map { FileManager.default.fileExists(atPath: $0) } ?? false
+
+            if !conflictingExists {
+                // The conflicting worktree no longer exists on disk - prune stale reference and retry
+                if verbose {
+                    let displayPath = conflictingPath ?? "unknown path"
+                    print("Conflicting worktree at \(displayPath) no longer exists on disk, pruning...")
+                }
+                try await gitService.pruneWorktrees()
+
+                // Re-fetch the branch now that it's no longer "checked out"
+                if isPR {
+                    try await gitService.fetchBranch(branch)
+                }
+
+                try await gitService.createWorktreeFromExisting(at: path, branch: branch)
+                if verbose {
+                    print("Created worktree from existing branch after pruning: \(branch)")
+                }
+            } else {
+                // Branch is genuinely checked out in another active worktree - force create
+                if verbose {
+                    print("Branch '\(branch)' is checked out at \(conflictingPath!), force-creating worktree...")
+                }
+                try await gitService.createWorktreeFromExistingForce(at: path, branch: branch)
+                if verbose {
+                    print("Created worktree (forced) from existing branch: \(branch)")
+                }
+            }
+        }
+    }
+
+    /// Parse the conflicting worktree path from a git "already used by worktree" error message.
+    private func parseConflictingWorktreePath(from errorMessage: String) -> String? {
+        if let match = errorMessage.firstMatch(of: /is already used by worktree at '([^']+)'/) {
+            return String(match.1)
+        }
+        return nil
     }
 
     // MARK: - Script Execution
