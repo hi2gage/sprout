@@ -39,4 +39,22 @@ struct GitServiceTests {
             #expect(try await service.getRemoteRepo() == "pointfreeco/swift-dependencies")
         }
     }
+
+    @Test("deleteBranch throws for missing branch", .tags(.service))
+    func gitServiceDeleteMissingBranch() async throws {
+        try await withTemporaryDirectory { dir in
+            _ = try runProcess(["git", "init"], cwd: dir)
+            _ = try runProcess(["git", "config", "user.email", "tests@example.com"], cwd: dir)
+            _ = try runProcess(["git", "config", "user.name", "sprout-tests"], cwd: dir)
+            try "hello".write(to: dir.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+            _ = try runProcess(["git", "add", "."], cwd: dir)
+            _ = try runProcess(["git", "commit", "-m", "init"], cwd: dir)
+
+            let service = GitService(workingDirectoryURL: dir)
+            await #expect(throws: GitError.self) {
+                try await service.deleteBranch("missing/branch")
+            }
+        }
+    }
+
 }
