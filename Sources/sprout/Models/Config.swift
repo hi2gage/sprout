@@ -75,14 +75,23 @@ struct LaunchConfig: Codable {
     /// Shell script for PRs (defaults to script if not set)
     var prScript: String?
 
+    /// Shell script when resuming an existing worktree (defaults to script if not set)
+    var resumeScript: String?
+
     enum CodingKeys: String, CodingKey {
         case script
         case prScript = "pr_script"
+        case resumeScript = "resume_script"
     }
 
     /// Get the appropriate script for PRs
     var resolvedPRScript: String {
         prScript ?? script
+    }
+
+    /// Get the appropriate script for resuming existing worktrees
+    var resolvedResumeScript: String {
+        resumeScript ?? script
     }
 }
 
