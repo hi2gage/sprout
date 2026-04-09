@@ -1,16 +1,5 @@
 import ArgumentParser
 import Foundation
-import FuzzyTUI
-
-/// Represents a worktree for display in the fuzzy finder
-struct WorktreeItem: CustomStringConvertible, Hashable, Sendable, Equatable {
-    let path: String
-    let branch: String
-
-    var description: String {
-        "\(branch)  \u{001B}[90m\(path)\u{001B}[0m"
-    }
-}
 
 struct Prune: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -26,13 +15,12 @@ struct Prune: AsyncParsableCommand {
     @Flag(name: .long, help: "Read branch names from stdin (one per line)")
     var stdin: Bool = false
 
-    @Argument(help: "Branch name or pattern to prune (optional - launches picker if not provided)")
+    @Argument(help: "Branch name or pattern to prune")
     var branch: String?
 
     @Flag(name: [.short, .long], help: "Print verbose output")
     var verbose: Bool = false
 
-    @MainActor
     func run() async throws {
         let gitService = GitService()
         let hooksService = HooksService()
@@ -82,7 +70,7 @@ struct Prune: AsyncParsableCommand {
                 print("No worktrees matching '\(branch)' found.")
                 print("\nAvailable worktrees:")
                 for wt in worktrees {
-                    print("  \(wt.branch) -> \(wt.path)")
+                    print("  \(wt.branch)\t\(wt.path)")
                 }
                 return
             }
@@ -90,43 +78,17 @@ struct Prune: AsyncParsableCommand {
             // With --dry-run and no branch, show all worktrees
             toRemove = worktrees
         } else {
-            // Use fuzzy finder for interactive selection
-            let items = worktrees.map { WorktreeItem(path: $0.path, branch: $0.branch) }
-
-            let stream = AsyncStream { continuation in
-                for item in items {
-                    continuation.yield(item)
-                }
-                continuation.finish()
+            // No branch specified — list worktrees and exit
+            print("Worktrees:")
+            for wt in worktrees {
+                print("  \(wt.branch)\t\(wt.path)")
             }
-
-            let selector = try FuzzySelector(
-                choices: stream,
-                multipleSelection: true
-            )
-
-            let selected: [WorktreeItem]
-            do {
-                selected = try await selector.run()
-            } catch {
-                // User cancelled with Ctrl-C
-                print("\nCancelled.")
-                return
-            }
-
-            if selected.isEmpty {
-                print("No worktrees selected.")
-                return
-            }
-
-            toRemove = selected.map { (path: $0.path, branch: $0.branch) }
-
-            // Skip confirmation - user already explicitly selected in fuzzy finder
-            print("\nRemoving selected worktrees...")
+            print("\nUsage: sprout prune <branch> [--force]")
+            return
         }
 
-        // Confirm if not forced (only for non-interactive mode)
-        if branch != nil && !force && !dryRun {
+        // Confirm if not forced
+        if !force && !dryRun {
             print("\nWill remove:")
             for wt in toRemove {
                 print("  - \(wt.branch)")
