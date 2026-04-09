@@ -154,9 +154,17 @@ struct Launch: AsyncParsableCommand {
             }
         }
 
-        // Determine which script to use (PR vs regular ticket)
+        // Determine which script to use (PR vs regular ticket vs resume)
         let isPR = context.sourceBranch != nil
-        let launchScript = isPR ? sproutConfig.launch.resolvedPRScript : sproutConfig.launch.script
+        let isResume = worktreeExists
+        let launchScript: String
+        if isResume {
+            launchScript = sproutConfig.launch.resolvedResumeScript
+        } else if isPR {
+            launchScript = sproutConfig.launch.resolvedPRScript
+        } else {
+            launchScript = sproutConfig.launch.script
+        }
 
         // Compose prompt content (for non-PR sources)
         if !isPR {
