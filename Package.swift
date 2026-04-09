@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "sprout",
+    platforms: [.macOS(.v15)],
     products: [
         .executable(name: "sprout", targets: ["sprout"]),
     ],
