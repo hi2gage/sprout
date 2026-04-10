@@ -49,21 +49,17 @@ sprout launch IOS-1234 --verbose
 
 ## Configuration
 
-Create a config file at `~/.sprout/config.toml`:
+Create a config file at `~/.sprout/config.toml`. The only required section is `[launch]` with a `script` field.
+
+### `[launch]` (required)
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `script` | Yes | Shell script to execute after worktree setup |
+| `pr_script` | No | Separate script for PR launches (defaults to `script`) |
+| `resume_script` | No | Script for resuming an existing worktree (defaults to `script`) |
 
 ```toml
-[sources.jira]
-base_url = "https://your-company.atlassian.net"
-email = "you@company.com"
-api_token = "your-api-token"
-
-[sources.github]
-repo = "owner/repo"  # Optional - auto-detected from git remote
-
-[worktree]
-branch_template = "{ticket_id}"
-path_template = "../worktrees/{branch}"
-
 [launch]
 script = """
 osascript -e 'tell application "iTerm"
@@ -73,10 +69,105 @@ osascript -e 'tell application "iTerm"
     end tell
 end tell'
 """
+```
 
+### `[worktree]`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `path_template` | `"../worktrees/{branch}"` | Where to create worktrees (relative to repo root, or absolute) |
+| `branch_template` | `"{ticket_id}"` | Template for naming branches |
+
+```toml
+[worktree]
+path_template = "../worktrees/{branch}"
+branch_template = "{user}/{ticket_id}"
+```
+
+### `[prompt]`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `prefix` | _(none)_ | Text prepended before the prompt body |
+| `template` | `"# {title}\n\n{description}"` | Template for the prompt body |
+| `suffix` | _(none)_ | Text appended after the prompt body |
+
+```toml
+[prompt]
+prefix = """
+You are working in an iOS codebase using Swift and SwiftUI.
+Follow existing code patterns and conventions.
+"""
+suffix = "Start by understanding the codebase structure, then implement the changes."
+```
+
+### `[sources.jira]`
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `base_url` | Yes | | Jira instance URL (e.g., `"https://company.atlassian.net"`) |
+| `email` | Yes | | Email for authentication (overridden by `JIRA_EMAIL` or `JIRA_USER` env var) |
+| `token` | No | | API token (prefer `JIRA_TOKEN` or `JIRA_API_TOKEN` env var) |
+| `default_project` | No | | Default project key for auto-detection |
+| `fields` | No | `["summary", "description"]` | Jira fields to include in the prompt |
+
+```toml
+[sources.jira]
+base_url = "https://your-company.atlassian.net"
+email = "you@company.com"
+```
+
+### `[sources.github]`
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `repo` | No | _(auto-detected from git remote)_ | Default repo for issue/PR lookup (e.g., `"owner/repo"`) |
+| `token` | No | | API token (prefer `gh auth login` or `GITHUB_TOKEN` env var) |
+
+```toml
+[sources.github]
+repo = "owner/repo"
+```
+
+### `[detection]`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `jira_pattern` | `"[A-Z]+-[0-9]+"` | Regex pattern for detecting Jira ticket IDs |
+| `github_patterns` | `["#[0-9]+", "gh:[0-9]+"]` | Patterns for detecting GitHub issue references |
+
+### `[variables]`
+
+Arbitrary key-value pairs available for interpolation in all templates and scripts.
+
+```toml
 [variables]
 user = "your-username"
+team = "ios"
 ```
+
+### Available Variables
+
+These variables can be used in `script`, `path_template`, `branch_template`, and prompt templates:
+
+| Variable | Description |
+|----------|-------------|
+| `{ticket_id}` | Raw identifier from input (e.g., `IOS-1234`, `567`) |
+| `{branch}` | Computed branch name |
+| `{worktree}` | Absolute path to the worktree |
+| `{repo_root}` | Root of the current git repository |
+| `{repo_name}` | Name of the repository directory |
+| `{timestamp}` | Unix timestamp |
+| `{date}` | Date in YYYY-MM-DD format |
+| `{title}` | Ticket title/summary (from source) |
+| `{description}` | Full description (from source) |
+| `{slug}` | Slugified title |
+| `{url}` | Link back to the ticket |
+| `{author}` | Ticket creator |
+| `{labels}` | Comma-separated labels |
+| `{prompt}` | Escaped prompt content (for inline shell use) |
+| `{prompt_file}` | Path to the generated prompt file |
+| Any `[variables]` key | Custom variables from config |
 
 ## Commands
 
