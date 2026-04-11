@@ -43,4 +43,43 @@ struct ConfigLoaderServiceTests {
         }
     }
 
+    @Test("decodes default_branch_type from worktree config", .tags(.service))
+    func configLoaderDefaultBranchType() throws {
+        try withTemporaryDirectory { dir in
+            let configFile = dir.appendingPathComponent("config.toml")
+            let toml = """
+            [launch]
+            script = "echo hi"
+
+            [worktree]
+            branch_template = "{branch_type}/{ticket_id}/{slug}"
+            default_branch_type = "chore"
+            """
+            try toml.write(to: configFile, atomically: true, encoding: .utf8)
+
+            let config = try ConfigLoader.load(from: configFile.path)
+            #expect(config.worktree?.defaultBranchType == "chore")
+            #expect(config.worktree?.resolvedDefaultBranchType == "chore")
+        }
+    }
+
+    @Test("resolvedDefaultBranchType falls back to feature", .tags(.service))
+    func configLoaderDefaultBranchTypeFallback() throws {
+        try withTemporaryDirectory { dir in
+            let configFile = dir.appendingPathComponent("config.toml")
+            let toml = """
+            [launch]
+            script = "echo hi"
+
+            [worktree]
+            branch_template = "{branch_type}/{ticket_id}"
+            """
+            try toml.write(to: configFile, atomically: true, encoding: .utf8)
+
+            let config = try ConfigLoader.load(from: configFile.path)
+            #expect(config.worktree?.defaultBranchType == nil)
+            #expect(config.worktree?.resolvedDefaultBranchType == "feature")
+        }
+    }
+
 }
