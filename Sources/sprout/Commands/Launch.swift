@@ -31,6 +31,9 @@ struct Launch: AsyncParsableCommand {
     @Option(name: [.short, .long], help: "Override branch name")
     var branch: String?
 
+    @Option(name: [.short, .long], help: "Branch type prefix (e.g., feature, bugfix, hotfix, chore)")
+    var type: String?
+
     @Option(name: [.short, .long], help: "Use alternate config file")
     var config: String?
 
@@ -285,6 +288,9 @@ struct Launch: AsyncParsableCommand {
         // Extract repo name from path (e.g., "FreshWall" from "/Users/gage/Dev/Startups/FreshWall")
         let repoName = URL(fileURLWithPath: repoRoot).lastPathComponent
 
+        // Resolve branch type: explicit --type flag > config default > "feature"
+        let branchType = type ?? config.worktree?.resolvedDefaultBranchType ?? "feature"
+
         // Compute branch name:
         // 1. Explicit --branch flag takes priority
         // 2. For PRs, use the PR's source branch
@@ -301,6 +307,7 @@ struct Launch: AsyncParsableCommand {
                 "ticket_id": context.ticketId,
                 "slug": context.slug ?? Slugify.slugify(context.title ?? context.ticketId),
                 "user": config.variables?["user"] ?? "",
+                "branch_type": branchType,
             ])
         }
 
@@ -328,6 +335,7 @@ struct Launch: AsyncParsableCommand {
         var variables: [String: String] = [
             "ticket_id": context.ticketId,
             "branch": branchName,
+            "branch_type": branchType,
             "worktree": absoluteWorktreePath,
             "repo_root": repoRoot,
             "repo_name": repoName,

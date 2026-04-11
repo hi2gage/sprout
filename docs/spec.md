@@ -39,6 +39,7 @@ sprout prune [branch]    # Remove worktrees and their branches
 | `--pr <num>` | | string | Force GitHub PR source |
 | `--prompt <text>` | `-p` | string | Force raw prompt source |
 | `--branch <name>` | `-b` | string | Override computed branch name |
+| `--type <type>` | `-t` | string | Branch type prefix (e.g., feature, bugfix, hotfix, chore). Defaults to `"feature"` |
 | `--config <path>` | `-c` | string | Use alternate config file path |
 | `--dry-run` | `-n` | flag | Print what would happen, don't execute |
 | `--verbose` | `-v` | flag | Print detailed output |
@@ -96,6 +97,7 @@ pr_script = "..."        # Optional: separate script for PR launches (defaults t
 [worktree]
 path_template = "../worktrees/{branch}"   # Where to create worktrees
 branch_template = "{ticket_id}"           # How to name branches
+default_branch_type = "feature"           # Default for {branch_type} when --type not provided
 
 [prompt]
 prefix = "..."           # Text prepended to the prompt
@@ -130,6 +132,7 @@ When optional sections or fields are missing:
 |-------|---------|
 | `worktree.path_template` | `"../worktrees/{branch}"` |
 | `worktree.branch_template` | `"{ticket_id}"` |
+| `worktree.default_branch_type` | `"feature"` |
 | `prompt.template` | `"# {title}\n\n{description}"` |
 | `launch.pr_script` | Same as `launch.script` |
 | `sources.jira.fields` | `["summary", "description"]` |
@@ -270,6 +273,7 @@ These are always available for interpolation:
 |----------|--------|---------|
 | `{ticket_id}` | From context | `IOS-1234`, `567`, `prompt-12345678` |
 | `{branch}` | Computed from template | `IOS-1234`, `gage/IOS-1234` |
+| `{branch_type}` | `--type` flag or config default | `feature`, `bugfix`, `hotfix` |
 | `{worktree}` | Computed absolute path | `/Users/gage/Dev/worktrees/IOS-1234` |
 | `{repo_root}` | `git rev-parse --show-toplevel` | `/Users/gage/Dev/my-app` |
 | `{repo_name}` | Last path component of repo root | `my-app` |
@@ -313,7 +317,9 @@ Priority order:
 
 1. **Explicit `--branch` flag** — used as-is
 2. **PR source branch** — if the context has a `sourceBranch` (from a GitHub PR), use it directly
-3. **Branch template** — interpolate `worktree.branch_template` (default: `{ticket_id}`) with available variables (`ticket_id`, `slug`, `user`, and any custom variables)
+3. **Branch template** — interpolate `worktree.branch_template` (default: `{ticket_id}`) with available variables (`ticket_id`, `slug`, `user`, `branch_type`, and any custom variables)
+
+The `{branch_type}` variable is resolved as: explicit `--type` flag → `worktree.default_branch_type` config → `"feature"`.
 
 ---
 
