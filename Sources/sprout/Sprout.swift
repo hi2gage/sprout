@@ -48,6 +48,8 @@ enum GitError: Error, CustomStringConvertible {
     case notInRepo
     case worktreeCreationFailed(String)
     case commandFailed(String, String)
+    case processException(String, String?)
+    case worktreeLocked(String, String)
 
     var description: String {
         switch self {
@@ -57,6 +59,14 @@ enum GitError: Error, CustomStringConvertible {
             return "Failed to create worktree: \(message)"
         case .commandFailed(let command, let message):
             return "Git command '\(command)' failed: \(message)"
+        case .processException(let name, let reason):
+            return "Git subprocess raised \(name): \(reason ?? "no reason given")"
+        case .worktreeLocked(let path, let reason):
+            let detail = reason.isEmpty ? "no reason recorded" : reason
+            return """
+                Worktree '\(path)' is locked (\(detail)) — refusing to remove it. \
+                Stop whatever holds it, or run 'git worktree unlock \(path)' if the lock is stale.
+                """
         }
     }
 

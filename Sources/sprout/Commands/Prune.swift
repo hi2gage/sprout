@@ -36,6 +36,13 @@ struct Prune: AsyncParsableCommand {
             mainRepoRoot = try? await gitService.getRepoRoot()
         }
 
+        // Mutating git operations run from a known-good directory (the main repo root) rather
+        // than inheriting the process's cwd. Removing a worktree can leave `git`'s default cwd
+        // pointing at a deleted directory, which makes `Process` raise an NSException; pinning
+        // cwd to the main checkout avoids that failure path entirely.
+        let repoGitService = mainRepoRoot
+            .map { GitService(workingDirectoryURL: URL(fileURLWithPath: $0)) } ?? gitService
+
         if worktrees.isEmpty {
             print("No worktrees found.")
             return
@@ -116,9 +123,23 @@ struct Prune: AsyncParsableCommand {
                     // Capture worktree path before removal for hook
                     let worktreePath = wt.path
 
-                    try await gitService.removeWorktree(at: wt.path)
-                    try await gitService.deleteBranch(wt.branch)
+                    try await repoGitService.removeWorktree(at: wt.path)
+                    // Branch deletion is best-effort: a missing/renamed branch must not skip the
+                    // post-prune hook below, which reclaims the worktree's build artifacts.
+                    // Report it either way, though — a silent failure under "done" reads as if
+                    // the branch went with the worktree when it is still there.
+                    var branchNote: String?
+                    do {
+                        try await repoGitService.deleteBranch(wt.branch)
+                    } catch {
+                        branchNote = verbose
+                            ? "  branch \(wt.branch) not deleted: \(error)"
+                            : "  branch \(wt.branch) not deleted"
+                    }
                     print("done")
+                    if let branchNote {
+                        print(branchNote)
+                    }
 
                     // Run post-prune hook if it exists
                     if let repoRoot = mainRepoRoot {
@@ -149,7 +170,7 @@ struct Prune: AsyncParsableCommand {
 
         if !dryRun {
             // Clean up any stale worktree references
-            try await gitService.pruneWorktrees()
+            try await repoGitService.pruneWorktrees()
             print("\nDone!")
         }
     }
