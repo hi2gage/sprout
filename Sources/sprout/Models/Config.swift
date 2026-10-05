@@ -36,9 +36,13 @@ struct WorktreeConfig: Codable {
     /// Default: "{ticket_id}"
     var branchTemplate: String?
 
+    /// Default branch type when --type is not provided.
+    var defaultBranchType: String?
+
     enum CodingKeys: String, CodingKey {
         case pathTemplate = "path_template"
         case branchTemplate = "branch_template"
+        case defaultBranchType = "default_branch_type"
     }
 
     var resolvedPathTemplate: String {
@@ -47,6 +51,10 @@ struct WorktreeConfig: Codable {
 
     var resolvedBranchTemplate: String {
         branchTemplate ?? "{ticket_id}"
+    }
+
+    var resolvedDefaultBranchType: String {
+        defaultBranchType ?? "feature"
     }
 }
 

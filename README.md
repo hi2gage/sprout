@@ -40,6 +40,9 @@ sprout launch "Add a logout button to the settings page"
 # Batch mode - process multiple tickets
 sprout launch "IOS-1234, IOS-5678, IOS-9012"
 
+# Launch with a branch type prefix
+sprout launch IOS-1234 --type bugfix
+
 # Dry run to see what would happen
 sprout launch IOS-1234 --dry-run
 
@@ -77,11 +80,13 @@ end tell'
 |-----|---------|-------------|
 | `path_template` | `"../worktrees/{branch}"` | Where to create worktrees (relative to repo root, or absolute) |
 | `branch_template` | `"{ticket_id}"` | Template for naming branches |
+| `default_branch_type` | `"feature"` | Default value for `{branch_type}` when `--type` is not provided |
 
 ```toml
 [worktree]
 path_template = "../worktrees/{branch}"
-branch_template = "{user}/{ticket_id}"
+branch_template = "{branch_type}/{ticket_id}/{slug}"
+default_branch_type = "feature"
 ```
 
 ### `[prompt]`
@@ -154,6 +159,7 @@ These variables can be used in `script`, `path_template`, `branch_template`, and
 |----------|-------------|
 | `{ticket_id}` | Raw identifier from input (e.g., `IOS-1234`, `567`) |
 | `{branch}` | Computed branch name |
+| `{branch_type}` | Branch type prefix from `--type` flag or config default (e.g., `feature`, `bugfix`) |
 | `{worktree}` | Absolute path to the worktree |
 | `{repo_root}` | Root of the current git repository |
 | `{repo_name}` | Name of the repository directory |
